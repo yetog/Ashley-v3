@@ -8,9 +8,6 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load environment variables (for security)
-load_dotenv()
-
 # More robust module import with error handling
 try:
     # Dynamic path resolution
