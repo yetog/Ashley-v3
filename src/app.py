@@ -76,6 +76,7 @@ class AshleyAIAssistant:
                 - AI-Powered Insights
                 
                 Developed by Isayah Young Burke IONOS US Cloud.
+                The **Ashley AI Chatbot** is a LangChain-based chatbot that leverages the ** Meta-Llama-3.1-8B-Instruct** model to provide intelligent responses to user queries. The chatbot is implemented using **Streamlit** for the frontend and integrates with the IONOS inference API for AI-generated responses.
                 """)
             
             # Quick Start Questions Section in an Expander
