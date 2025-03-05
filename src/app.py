@@ -1,7 +1,6 @@
 import sys
 import os
 import streamlit as st
-from dotenv import load_dotenv
 import logging
 
 # Enhanced error handling and logging
