@@ -199,7 +199,7 @@ class AshleyAIAssistant:
                 st.markdown(message["content"])
         
         # Handle new user input
-        if user_input := st.chat_input("Ask Ashley anything about cloud consulting..."):
+        if user_input := st.chat_input("Ask Ashsley..."):
             self.process_user_input(user_input)
     
     def run(self):
