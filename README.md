@@ -1,4 +1,4 @@
-# IONOS AI Chatbot Project v2
+# IONOS AI Chatbot Project v3
 
 ## Overview
 The **IONOS AI Chatbot** is a LangChain-based chatbot that leverages the **IONOS Meta-Llama-3.1-8B-Instruct** model to provide intelligent responses to user queries. The chatbot is implemented using **Streamlit** for the frontend and integrates with the IONOS inference API for AI-generated responses.
