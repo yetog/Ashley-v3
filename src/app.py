@@ -71,12 +71,10 @@ class AshleyAIAssistant:
                 - Technical Problem Solving
                 - AI-Powered Insights
                  """)
-
                 st.markdown("""
                 Developed by Isayah Young Burke IONOS US Cloud.
-                **Ashley AI Chatbot Overview**
 
-                            **Ashley AI Chatbot Overview**
+                            Ashley AI Chatbot Overview
 
                 * **Core Technology:**
                     * LangChain-based chatbot.
@@ -84,7 +82,7 @@ class AshleyAIAssistant:
                 * **Frontend:**
                     * Implemented using Streamlit for a user-friendly interface.
                 * **Backend Integration:**
-                    * Integrates with the IONOS inference API for AI-generated responses.
+                    * Integrates with the Python and the IONOS inference API for AI-generated responses.
                 * **Functionality:**
                     * Provides intelligent responses to user queries.
                                 """)
