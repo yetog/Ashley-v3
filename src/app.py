@@ -82,7 +82,7 @@ class AshleyAIAssistant:
                 * **Frontend:**
                     * Implemented using Streamlit for a user-friendly interface.
                 * **Backend Integration:**
-                    * Integrates with the Python and the IONOS inference API for AI-generated responses.
+                    * Integrates with Python and the IONOS inference API for AI-generated responses.
                 * **Functionality:**
                     * Provides intelligent responses to user queries.
                                 """)
