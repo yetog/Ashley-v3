@@ -1,107 +1,134 @@
-# IONOS AI Chatbot Project v3
+# Ashley - AI Cloud Assistant v4
 
-## Overview
-The **IONOS AI Chatbot** is a LangChain-based chatbot that leverages the **IONOS Meta-Llama-3.1-8B-Instruct** model to provide intelligent responses to user queries. The chatbot is implemented using **Streamlit** for the frontend and integrates with the IONOS inference API for AI-generated responses.
+> An intelligent AI assistant for IONOS Cloud — built to chat, consult, and control your infrastructure.
 
-## Features
-- Interactive chat interface using **Streamlit**
-- Stateless response handling
-- Uses **LangChain** for structured LLM interaction
-- Supports **IONOS AI inference API** integration
-- Secure API token management
+---
 
-## Technologies Used
-- **Python 3.13**
-- **Streamlit** (UI Framework)
-- **LangChain** (LLM Integration)
-- **IONOS Inference API**
-- **Thunder Client** (API Testing)
+## What's New in v4
+
+Ashley v4 is a major upgrade from a conversational chatbot to a **cloud-capable AI assistant**. She can now talk to your IONOS infrastructure directly — listing servers, datacenters, and spinning up new machines — all from a natural language chat interface.
+
+### v4 Highlights
+- **IONOS Cloud API integration** — Ashley can manage real infrastructure, not just answer questions about it
+- **Intent detection** — cloud commands are routed directly to the API without wasting LLM tokens
+- **Secure credential management** — secrets moved from hardcoded config to `.env` (never committed to git)
+- **IONOS-aware system prompt** — LLM responses are now grounded in cloud context
+
+---
+
+## What Ashley Can Do
+
+### Chat (Powered by Meta-Llama-3.1-8B via IONOS Inference)
+- Cloud consulting and architecture questions
+- IONOS product guidance
+- Technical troubleshooting
+
+### Cloud Actions (Live IONOS Cloud API)
+| Say something like... | What happens |
+|---|---|
+| "list my datacenters" | Fetches all your DCs with location and ID |
+| "show my servers" | Lists servers across all datacenters |
+| "list servers in App Testing" | Lists servers in a specific datacenter |
+| "create a server named web-01 in App Testing" | Spins up a new server via the Cloud API |
+| "create a 4 core 8GB server named dev-box in Pen Testing" | Creates server with custom specs |
+
+---
 
 ## Project Structure
+
 ```
-IONOS-Chat-bot-project/
-│── src/
-│   ├── app.py            # Main Streamlit UI
-│   ├── backend.py        # Query handler for IONOS API
-│   ├── config.py         # Stores API tokens and model settings
-│   ├── templates/        # UI templates
-│   ├── utils.py          # Utility functions
-│── venv/                 # Virtual environment
-│── requirements.txt      # Project dependencies
-│── README.md             # Project documentation
+Ashley-v3/
+├── src/
+│   ├── app.py          # Streamlit UI and chat interface
+│   ├── backend.py      # Intent detection + LLM query handler
+│   ├── config.py       # Loads credentials from .env
+│   ├── utils.py        # IONOS Cloud API functions
+│   └── templates/      # UI components
+├── .env                # Your secrets (never committed)
+├── .env.example        # Template for setting up credentials
+├── .gitignore          # Excludes .env, pycache, venv
+└── README.md
 ```
 
-## Setup and Installation
-### 1️⃣ Clone the Repository
+---
+
+## Setup
+
+### 1. Clone the repo
 ```bash
-cd ~/Desktop/
-git clone https://github.com/your-repo/IONOS-Chat-bot-project.git
-cd IONOS-Chat-bot-project
+git clone https://github.com/yetog/Ashley-v3.git
+cd Ashley-v3
 ```
 
-### 2️⃣ Set Up Virtual Environment
+### 2. Create a virtual environment
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python -m venv venv
+source venv/bin/activate        # Mac/Linux
+venv\Scripts\activate           # Windows
 ```
 
-### 3️⃣ Install Dependencies
+### 3. Install dependencies
 ```bash
-pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4️⃣ Configure API Access
-Update `config.py` with your IONOS API token:
-```python
-IONOS_API_TOKEN = "your_token_here"
-MODEL_NAME = "meta-llama/Meta-Llama-3.1-8B-Instruct"
-ENDPOINT = "https://openai.inference.de-txl.ionos.com/v1/chat/completions"
+### 4. Configure credentials
+```bash
+cp .env.example .env
 ```
 
-### 5️⃣ Run the Chatbot
+Edit `.env` with your values:
+```env
+IONOS_API_TOKEN=your_inference_api_token
+IONOS_CLOUD_USERNAME=your@email.com
+IONOS_CLOUD_PASSWORD=yourpassword
+MODEL_NAME=meta-llama/Meta-Llama-3.1-8B-Instruct
+ENDPOINT=https://openai.inference.de-txl.ionos.com/v1/chat/completions
+```
+
+> **Never commit `.env` to git.** It is already listed in `.gitignore`.
+
+### 5. Run Ashley
 ```bash
 streamlit run src/app.py
 ```
 
-## API Testing with Thunder Client
-To verify API connectivity, use **Thunder Client**:
-- **Endpoint**: `https://openai.inference.de-txl.ionos.com/v1/chat/completions`
-- **Headers**:
-  ```json
-  {
-    "Authorization": "Bearer your_token_here",
-    "Content-Type": "application/json"
-  }
-  ```
-- **Body**:
-  ```json
-  {
-    "model": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "max_tokens": 1024
-  }
-  ```
+Ashley will be available at `http://localhost:8501`
 
-## Troubleshooting
-### 401 Unauthorized Error
-- Ensure **API Token** is correct and active in `config.py`
-- Check for typos or incorrect header formatting in API requests
+---
 
-### Streamlit Module Not Found
-```bash
-pip install streamlit
-```
+## Technologies
 
-### Missing Dependencies
-```bash
-pip install -r requirements.txt
-```
+| Layer | Technology |
+|---|---|
+| Frontend | Streamlit |
+| LLM | Meta-Llama-3.1-8B-Instruct via IONOS Inference API |
+| Cloud API | IONOS Cloud REST API v6 |
+| Config | python-dotenv |
+| Language | Python 3.11+ |
 
-## Future Improvements
-- Implement **session-based memory** for better conversational flow
-- Enhance UI with **custom Streamlit components**
-- Improve error handling and logging
+---
+
+## Roadmap
+
+- [ ] **Conversation memory** — multi-turn context so Ashley remembers earlier messages
+- [ ] **Server templates** — pre-built configs for common use cases (web server, pen test box, n8n)
+- [ ] **Start / stop / delete servers** from chat
+- [ ] **Cost estimation** — show pricing before creating resources
+- [ ] **IP and network management** — reserve IPs, configure NICs from chat
+- [ ] **Deployment automation** — push code or run scripts on newly created servers
+
+---
+
+## Security
+
+- API credentials are stored in `.env` and never committed to version control
+- `.gitignore` is configured to exclude `.env`, `__pycache__`, and virtual environments
+- If you previously had tokens hardcoded in `config.py`, rotate them in your IONOS DCD portal under **Profile > API Keys**
+
+---
 
 ## License
-Made using IONOS AI Model Hub and DCD 
+
+Built by Isayah Young-Burke for IONOS US Cloud.  
+Powered by IONOS AI Model Hub and DCD.

@@ -32,9 +32,9 @@ class AshleyAIAssistant:
         self._setup_page_config()
         self._initialize_session_state()
         self.quick_start_questions = [
+            "List my datacenters",
+            "Show all my servers",
             "What cloud services does IONOS offer?",
-            "Can you help me set up a bidriectional firewall?",
-            "What are the benefits of cloud computing?"
         ]
         
     def _setup_page_config(self):
@@ -118,28 +118,27 @@ class AshleyAIAssistant:
 
             with st.expander("📌 Patch Notes", expanded=False):
 
-                st.markdown("## 📌 Patch Notes v3 - Ashley AI Cloud Assistant")
+                st.markdown("## 📌 Patch Notes v4 - Ashley AI Cloud Assistant")
 
-                st.markdown("### 🔹 **Major Enhancements**")
-                st.markdown("* **Refactored Architecture:** Introduced `AshleyAIAssistant` class for better modularity and scalability.")
-                st.markdown("* **Robust Error Handling:** Added structured logging and dynamic error fallback for API failures.")
+                st.markdown("### 🔹 **v4 - IONOS Cloud Integration**")
+                st.markdown("* **Live Cloud API:** Ashley can now list datacenters, list servers, and create servers directly from chat.")
+                st.markdown("* **Intent Detection:** Cloud commands are routed to the IONOS Cloud API without consuming LLM tokens.")
+                st.markdown("* **Secure Credentials:** API secrets moved from hardcoded config to `.env` file — never committed to git.")
+                st.markdown("* **IONOS System Prompt:** LLM is now grounded in IONOS Cloud context for more relevant answers.")
 
-                st.markdown("### 🔹 **New Features**")
-                st.markdown("* **🚀 Quick Start Questions:** Users can now click preset cloud-related questions for instant responses.")
-                st.markdown("* **📌 Sidebar Improvements:** New expandable sections for AI overview, resources, and quick start interactions.")
-                st.markdown("* **🌐 Resource Hub:** Direct access to IONOS Cloud, API documentation, and LinkedIn.")
+                st.markdown("### 🔹 **v3 - Architecture Refactor**")
+                st.markdown("* **Refactored Architecture:** Introduced `AshleyAIAssistant` class for modularity and scalability.")
+                st.markdown("* **Quick Start Questions:** Preset cloud questions for instant responses.")
+                st.markdown("* **Sidebar Improvements:** Expandable sections for AI overview, resources, and quick start interactions.")
+                st.markdown("* **Enhanced Session Management:** Tracks conversation history and token usage.")
 
-                st.markdown("### 🔹 **Performance & UX Improvements**")
-                st.markdown("* **Enhanced Session Management:** Tracks conversation history, token usage, and prevents redundant queries.")
-                st.markdown("* **Smarter Input Handling:** Validates queries to ensure a smooth chat experience.")
-                st.markdown("* **Improved Query Execution:** Optimized backend calls with error recovery mechanisms.")
+                st.markdown("### 💡 **Coming in v5:**")
+                st.markdown("* **Conversation Memory** — multi-turn context across messages")
+                st.markdown("* **Start / Stop / Delete servers** from chat")
+                st.markdown("* **Server templates** for common workloads")
+                st.markdown("* **Cloud cost estimation** before provisioning")
 
-                st.markdown("### 💡 **Upcoming Enhancements:**")
-                st.markdown("* **Real-time AI Memory Optimization**")
-                st.markdown("* **Interactive Charts & Visualizations**")
-                st.markdown("* **Advanced Cloud Cost Estimator**")
-
-                st.markdown("🚀 **Ashley is now more responsive, structured, and intuitive than ever!**")
+                st.markdown("🚀 **Ashley v4 — now she doesn't just talk about the cloud, she controls it.**")
 
 
     def process_user_input(self, user_input):
@@ -205,7 +204,7 @@ class AshleyAIAssistant:
     def run(self):
         """Main method to run the Streamlit application."""
         # Render the title
-        st.title("Your AI Cloud Assistant")
+        st.title("Ashley v4 — Your AI Cloud Assistant")
         
         # Render sidebar
         self.render_sidebar()
