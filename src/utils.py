@@ -101,3 +101,108 @@ def get_datacenter_id_by_name(name):
         if dc.get("properties", {}).get("name", "").lower() == name.lower():
             return dc["id"]
     return None
+
+
+def _get_server_id_by_name(datacenter_id, server_name):
+    resp = requests.get(
+        f"{CLOUD_API_BASE}/datacenters/{datacenter_id}/servers",
+        auth=_auth(), headers=_headers()
+    )
+    if resp.status_code != 200:
+        return None
+    for s in resp.json().get("items", []):
+        if s.get("properties", {}).get("name", "").lower() == server_name.lower():
+            return s["id"]
+    return None
+
+
+def start_server(datacenter_id, server_id):
+    resp = requests.post(
+        f"{CLOUD_API_BASE}/datacenters/{datacenter_id}/servers/{server_id}/start",
+        auth=_auth(), headers=_headers()
+    )
+    if resp.status_code in (200, 202):
+        return f"Server `{server_id}` is starting."
+    return f"Error starting server: {resp.status_code} {resp.text}"
+
+
+def stop_server(datacenter_id, server_id):
+    resp = requests.post(
+        f"{CLOUD_API_BASE}/datacenters/{datacenter_id}/servers/{server_id}/stop",
+        auth=_auth(), headers=_headers()
+    )
+    if resp.status_code in (200, 202):
+        return f"Server `{server_id}` is stopping."
+    return f"Error stopping server: {resp.status_code} {resp.text}"
+
+
+def delete_server(datacenter_id, server_id):
+    resp = requests.delete(
+        f"{CLOUD_API_BASE}/datacenters/{datacenter_id}/servers/{server_id}",
+        auth=_auth(), headers=_headers()
+    )
+    if resp.status_code in (200, 202, 204):
+        return f"Server `{server_id}` has been deleted."
+    return f"Error deleting server: {resp.status_code} {resp.text}"
+
+
+def find_server_across_datacenters(server_name):
+    """Search all datacenters for a server by name. Returns (dc_id, server_id) or (None, None)."""
+    resp = requests.get(f"{CLOUD_API_BASE}/datacenters", auth=_auth(), headers=_headers())
+    if resp.status_code != 200:
+        return None, None
+    for dc in resp.json().get("items", []):
+        server_id = _get_server_id_by_name(dc["id"], server_name)
+        if server_id:
+            return dc["id"], server_id
+    return None, None
+
+
+# Server templates: preset configs for common workloads
+SERVER_TEMPLATES = {
+    "web": {
+        "description": "Web server — nginx/Apache ready",
+        "cores": 2,
+        "ram_gb": 4,
+        "name_prefix": "web-server",
+    },
+    "pentest": {
+        "description": "Pen test box — high CPU for tooling",
+        "cores": 4,
+        "ram_gb": 8,
+        "name_prefix": "pentest-box",
+    },
+    "n8n": {
+        "description": "n8n automation server",
+        "cores": 2,
+        "ram_gb": 4,
+        "name_prefix": "n8n-server",
+    },
+    "db": {
+        "description": "Database server — memory optimized",
+        "cores": 2,
+        "ram_gb": 8,
+        "name_prefix": "db-server",
+    },
+    "dev": {
+        "description": "Dev/sandbox box",
+        "cores": 1,
+        "ram_gb": 2,
+        "name_prefix": "dev-box",
+    },
+}
+
+
+def create_server_from_template(datacenter_id, template_name, custom_name=None):
+    template = SERVER_TEMPLATES.get(template_name.lower())
+    if not template:
+        available = ", ".join(SERVER_TEMPLATES.keys())
+        return f"Unknown template '{template_name}'. Available: {available}"
+
+    name = custom_name or template["name_prefix"]
+    return create_server(
+        datacenter_id,
+        name=name,
+        cores=template["cores"],
+        ram_mb=template["ram_gb"] * 1024,
+    )

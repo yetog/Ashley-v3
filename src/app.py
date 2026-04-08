@@ -27,7 +27,7 @@ class AshleyAIAssistant:
 
     def _setup_page_config(self):
         st.set_page_config(
-            page_title="Ashley v5 - AI Cloud Assistant",
+            page_title="Ashley v6 - AI Cloud Assistant",
             page_icon="🚀",
             layout="wide",
             initial_sidebar_state="expanded"
@@ -47,7 +47,7 @@ class AshleyAIAssistant:
         with st.sidebar:
             with st.expander("👤 Meet Ashley", expanded=False):
                 st.markdown("""
-**Ashley v5** is your IONOS Cloud AI assistant. She can:
+**Ashley v6** is your IONOS Cloud AI assistant. She can:
 - Answer cloud and infrastructure questions
 - List your datacenters and servers
 - Create new servers on demand
@@ -63,6 +63,7 @@ Powered by **Meta-Llama-3.3-70B** via IONOS AI Model Hub.
                 quick_actions = [
                     "List my datacenters",
                     "Show all my servers",
+                    "What server templates are available?",
                     "What cloud services does IONOS offer?",
                     "List my knowledge base documents",
                 ]
@@ -107,17 +108,15 @@ Powered by **Meta-Llama-3.3-70B** via IONOS AI Model Hub.
                 st.markdown("[API Docs](https://api.ionos.com/docs/inference-openai/v1)")
 
             with st.expander("📌 Patch Notes", expanded=False):
-                st.markdown("## Ashley v5")
-                st.markdown("### New in v5")
-                st.markdown("* **Llama 3.3 70B** — upgraded from 8B for smarter responses")
-                st.markdown("* **Tool Calling** — LLM decides when to call cloud APIs, no more regex")
-                st.markdown("* **Streaming responses** — Ashley types in real time")
-                st.markdown("* **Object Storage** — conversations saved to IONOS S3")
-                st.markdown("* **Knowledge Base** — upload docs for Ashley to reference")
-                st.markdown("* **Conversation History** — load previous sessions from sidebar")
+                st.markdown("## Ashley v6")
+                st.markdown("### New in v6")
+                st.markdown("* **RAG** — upload docs, Ashley embeds them via `BAAI/bge-large-en-v1.5` and retrieves context on every query")
+                st.markdown("* **Start / Stop / Delete servers** — full server lifecycle from chat")
+                st.markdown("* **Server templates** — web, pentest, n8n, db, dev presets")
+                st.markdown("### v5")
+                st.markdown("* Llama 3.3 70B, tool calling, streaming, Object Storage, session history")
                 st.markdown("### v4")
-                st.markdown("* IONOS Cloud API integration (list DCs, servers, create server)")
-                st.markdown("* Secure .env credential management")
+                st.markdown("* IONOS Cloud API integration, secure .env credentials")
                 st.markdown("### v3")
                 st.markdown("* AshleyAIAssistant class, quick start questions, sidebar")
 
@@ -161,7 +160,7 @@ Powered by **Meta-Llama-3.3-70B** via IONOS AI Model Hub.
             self.process_user_input(user_input)
 
     def run(self):
-        st.title("Ashley v5 — Your AI Cloud Assistant")
+        st.title("Ashley v6 — Your AI Cloud Assistant")
         self.render_sidebar()
         self.handle_chat_interaction()
 

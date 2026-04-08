@@ -1,22 +1,25 @@
 import json
 import logging
 from openai import OpenAI
-from src.config import IONOS_API_TOKEN, MODEL_NAME, ENDPOINT
+from src.config import IONOS_API_TOKEN, MODEL_NAME
 from src.utils import (
     list_datacenters, list_all_servers, list_servers,
-    create_server, get_datacenter_id_by_name
+    create_server, create_server_from_template, get_datacenter_id_by_name,
+    start_server, stop_server, delete_server, find_server_across_datacenters,
+    SERVER_TEMPLATES,
 )
 from src.storage import list_knowledge_docs
+from src.rag import retrieve_context
 
 logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=IONOS_API_TOKEN, base_url="https://openai.inference.de-txl.ionos.com/v1")
 
-SYSTEM_PROMPT = """You are Ashley, an intelligent AI assistant for IONOS Cloud built by Isayah Young-Burke.
+BASE_SYSTEM_PROMPT = """You are Ashley, an intelligent AI assistant for IONOS Cloud built by Isayah Young-Burke.
 You help users manage cloud infrastructure, answer technical questions, and take real actions on their IONOS account.
-You have access to tools that let you list datacenters, list servers, and create servers.
+You have tools to list datacenters, list/start/stop/delete servers, create servers from scratch or from templates, and search the knowledge base.
 When a user asks you to perform a cloud action, use the appropriate tool rather than just describing it.
-Be concise, professional, and helpful. When returning infrastructure data, format it clearly in markdown."""
+Be concise, professional, and helpful. Format infrastructure data clearly in markdown."""
 
 TOOLS = [
     {
@@ -37,7 +40,7 @@ TOOLS = [
                 "properties": {
                     "datacenter_name": {
                         "type": "string",
-                        "description": "Name of the datacenter (optional). If omitted, lists servers in all datacenters.",
+                        "description": "Name of the datacenter. If omitted, lists servers across all datacenters.",
                     }
                 },
                 "required": [],
@@ -47,27 +50,60 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "create_server",
-            "description": "Create a new server in a specified datacenter",
+            "name": "start_server",
+            "description": "Start a stopped server by name",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "datacenter_name": {
-                        "type": "string",
-                        "description": "Name of the datacenter to create the server in",
-                    },
-                    "server_name": {
-                        "type": "string",
-                        "description": "Name for the new server",
-                    },
-                    "cores": {
-                        "type": "integer",
-                        "description": "Number of CPU cores (default: 2)",
-                    },
-                    "ram_gb": {
-                        "type": "integer",
-                        "description": "RAM in GB (default: 4)",
-                    },
+                    "server_name": {"type": "string", "description": "Name of the server to start"},
+                    "datacenter_name": {"type": "string", "description": "Datacenter name (optional — searched automatically if omitted)"},
+                },
+                "required": ["server_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "stop_server",
+            "description": "Stop a running server by name",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "server_name": {"type": "string", "description": "Name of the server to stop"},
+                    "datacenter_name": {"type": "string", "description": "Datacenter name (optional)"},
+                },
+                "required": ["server_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_server",
+            "description": "Permanently delete a server by name. This is irreversible.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "server_name": {"type": "string", "description": "Name of the server to delete"},
+                    "datacenter_name": {"type": "string", "description": "Datacenter name (optional)"},
+                },
+                "required": ["server_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_server",
+            "description": "Create a new server with custom specs in a specified datacenter",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "datacenter_name": {"type": "string", "description": "Name of the datacenter"},
+                    "server_name": {"type": "string", "description": "Name for the new server"},
+                    "cores": {"type": "integer", "description": "Number of CPU cores (default: 2)"},
+                    "ram_gb": {"type": "integer", "description": "RAM in GB (default: 4)"},
                 },
                 "required": ["datacenter_name", "server_name"],
             },
@@ -76,16 +112,56 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "create_server_from_template",
+            "description": (
+                f"Create a server using a preset template. "
+                f"Available templates: {', '.join(SERVER_TEMPLATES.keys())}. "
+                f"Each template has preset CPU/RAM for the workload type."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "datacenter_name": {"type": "string", "description": "Name of the datacenter"},
+                    "template_name": {
+                        "type": "string",
+                        "enum": list(SERVER_TEMPLATES.keys()),
+                        "description": "Template to use",
+                    },
+                    "custom_name": {"type": "string", "description": "Custom server name (optional)"},
+                },
+                "required": ["datacenter_name", "template_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_knowledge_docs",
-            "description": "List documents stored in Ashley's knowledge base in Object Storage",
+            "description": "List documents stored in Ashley's knowledge base",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
 ]
 
 
+def _resolve_server(server_name, datacenter_name=None):
+    """Return (dc_id, server_id) for a given server name."""
+    if datacenter_name:
+        dc_id = get_datacenter_id_by_name(datacenter_name)
+        if not dc_id:
+            return None, f"Datacenter '{datacenter_name}' not found."
+        from src.utils import _get_server_id_by_name
+        server_id = _get_server_id_by_name(dc_id, server_name)
+        if not server_id:
+            return None, f"Server '{server_name}' not found in '{datacenter_name}'."
+        return (dc_id, server_id), None
+    dc_id, server_id = find_server_across_datacenters(server_name)
+    if not dc_id:
+        return None, f"Server '{server_name}' not found in any datacenter."
+    return (dc_id, server_id), None
+
+
 def _dispatch_tool(name, args):
-    """Execute a tool call and return the result as a string."""
     if name == "list_datacenters":
         return list_datacenters()
 
@@ -94,20 +170,47 @@ def _dispatch_tool(name, args):
         if dc_name:
             dc_id = get_datacenter_id_by_name(dc_name)
             if not dc_id:
-                return f"Datacenter '{dc_name}' not found. Try asking to list your datacenters."
+                return f"Datacenter '{dc_name}' not found."
             return list_servers(dc_id)
         return list_all_servers()
 
+    if name == "start_server":
+        ids, err = _resolve_server(args["server_name"], args.get("datacenter_name"))
+        if err:
+            return err
+        return start_server(ids[0], ids[1])
+
+    if name == "stop_server":
+        ids, err = _resolve_server(args["server_name"], args.get("datacenter_name"))
+        if err:
+            return err
+        return stop_server(ids[0], ids[1])
+
+    if name == "delete_server":
+        ids, err = _resolve_server(args["server_name"], args.get("datacenter_name"))
+        if err:
+            return err
+        return delete_server(ids[0], ids[1])
+
     if name == "create_server":
-        dc_name = args.get("datacenter_name")
-        dc_id = get_datacenter_id_by_name(dc_name)
+        dc_id = get_datacenter_id_by_name(args["datacenter_name"])
         if not dc_id:
-            return f"Datacenter '{dc_name}' not found. Try asking to list your datacenters first."
+            return f"Datacenter '{args['datacenter_name']}' not found."
         return create_server(
             dc_id,
             name=args.get("server_name", "ashley-server"),
             cores=args.get("cores", 2),
             ram_mb=args.get("ram_gb", 4) * 1024,
+        )
+
+    if name == "create_server_from_template":
+        dc_id = get_datacenter_id_by_name(args["datacenter_name"])
+        if not dc_id:
+            return f"Datacenter '{args['datacenter_name']}' not found."
+        return create_server_from_template(
+            dc_id,
+            template_name=args["template_name"],
+            custom_name=args.get("custom_name"),
         )
 
     if name == "list_knowledge_docs":
@@ -116,19 +219,41 @@ def _dispatch_tool(name, args):
     return f"Unknown tool: {name}"
 
 
-def query_ionos(prompt, conversation_history=None):
-    """
-    Send a prompt to the IONOS AI Model Hub (Llama 3.3 70B) with tool calling.
-    Handles multi-turn conversation history and returns the final response string.
-    """
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+def _build_messages(prompt, conversation_history=None):
+    """Build the message list, injecting RAG context if relevant docs exist."""
+    rag_context = retrieve_context(prompt)
+    system_prompt = BASE_SYSTEM_PROMPT
+    if rag_context:
+        system_prompt += f"\n\n{rag_context}"
 
+    messages = [{"role": "system", "content": system_prompt}]
     if conversation_history:
         messages.extend(conversation_history)
-
     messages.append({"role": "user", "content": prompt})
+    return messages
 
-    try:
+
+def _run_tool_loop(messages):
+    """Run the tool-calling loop until no more tool calls are needed. Returns final message."""
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=messages,
+        tools=TOOLS,
+        tool_choice="auto",
+        max_tokens=1024,
+    )
+    message = response.choices[0].message
+
+    while message.tool_calls:
+        tool_results = []
+        for tc in message.tool_calls:
+            args = json.loads(tc.function.arguments) if tc.function.arguments else {}
+            result = _dispatch_tool(tc.function.name, args)
+            tool_results.append({"tool_call_id": tc.id, "role": "tool", "content": result})
+
+        messages.append(message)
+        messages.extend(tool_results)
+
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
@@ -136,92 +261,29 @@ def query_ionos(prompt, conversation_history=None):
             tool_choice="auto",
             max_tokens=1024,
         )
-
         message = response.choices[0].message
 
-        # Handle tool calls
-        while message.tool_calls:
-            tool_results = []
-            for tc in message.tool_calls:
-                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                result = _dispatch_tool(tc.function.name, args)
-                tool_results.append({
-                    "tool_call_id": tc.id,
-                    "role": "tool",
-                    "content": result,
-                })
+    return messages, message
 
-            # Feed tool results back to the model
-            messages.append(message)
-            messages.extend(tool_results)
 
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
-                max_tokens=1024,
-            )
-            message = response.choices[0].message
-
-        return message.content or "I couldn't generate a response. Please try again."
-
+def query_ionos(prompt, conversation_history=None):
+    try:
+        messages = _build_messages(prompt, conversation_history)
+        messages, final_message = _run_tool_loop(messages)
+        return final_message.content or "I couldn't generate a response. Please try again."
     except Exception as e:
         logger.error(f"LLM query error: {e}")
         return f"Error communicating with AI Model Hub: {str(e)}"
 
 
 def stream_query_ionos(prompt, conversation_history=None):
-    """
-    Streaming version of query_ionos. Yields text chunks as they arrive.
-    Note: tool calling runs non-streamed first, then streams the final answer.
-    """
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-
-    if conversation_history:
-        messages.extend(conversation_history)
-
-    messages.append({"role": "user", "content": prompt})
-
+    """Resolve tool calls first, then stream the final answer."""
     try:
-        # First pass: check for tool calls (non-streamed)
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=messages,
-            tools=TOOLS,
-            tool_choice="auto",
-            max_tokens=1024,
-        )
+        messages = _build_messages(prompt, conversation_history)
+        messages, final_message = _run_tool_loop(messages)
 
-        message = response.choices[0].message
-
-        # Resolve any tool calls before streaming
-        while message.tool_calls:
-            tool_results = []
-            for tc in message.tool_calls:
-                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-                result = _dispatch_tool(tc.function.name, args)
-                tool_results.append({
-                    "tool_call_id": tc.id,
-                    "role": "tool",
-                    "content": result,
-                })
-
-            messages.append(message)
-            messages.extend(tool_results)
-
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
-                max_tokens=1024,
-            )
-            message = response.choices[0].message
-
-        # If no more tool calls, stream the final response
-        if not message.tool_calls:
-            messages.append({"role": "assistant", "content": message.content})
+        if not final_message.tool_calls:
+            messages.append({"role": "assistant", "content": final_message.content})
             stream = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=messages,
@@ -232,7 +294,6 @@ def stream_query_ionos(prompt, conversation_history=None):
                 delta = chunk.choices[0].delta.content
                 if delta:
                     yield delta
-
     except Exception as e:
         logger.error(f"Streaming error: {e}")
         yield f"Error: {str(e)}"

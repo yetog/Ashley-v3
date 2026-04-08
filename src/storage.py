@@ -83,7 +83,7 @@ def list_conversations():
 
 
 def upload_knowledge_doc(filename, content_bytes, content_type="text/plain"):
-    """Upload a document to the RAG knowledge base in Object Storage."""
+    """Upload a document to the RAG knowledge base and index it for retrieval."""
     try:
         client = _get_client()
         key = f"knowledge/{filename}"
@@ -93,7 +93,14 @@ def upload_knowledge_doc(filename, content_bytes, content_type="text/plain"):
             Body=content_bytes,
             ContentType=content_type,
         )
-        return f"Uploaded `{filename}` to knowledge base."
+        # Index the document for RAG
+        try:
+            from src.rag import index_document
+            text = content_bytes.decode("utf-8", errors="ignore")
+            index_result = index_document(filename, text)
+            return f"Uploaded `{filename}` to knowledge base. {index_result}"
+        except Exception as e:
+            return f"Uploaded `{filename}` but indexing failed: {e}"
     except Exception as e:
         return f"Upload failed: {e}"
 
