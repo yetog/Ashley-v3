@@ -6,6 +6,11 @@ load_dotenv()
 IONOS_API_TOKEN = os.getenv("IONOS_API_TOKEN")
 IONOS_CLOUD_USERNAME = os.getenv("IONOS_CLOUD_USERNAME")
 IONOS_CLOUD_PASSWORD = os.getenv("IONOS_CLOUD_PASSWORD")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3.1-8B-Instruct")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3.3-70B-Instruct")
 ENDPOINT = os.getenv("ENDPOINT", "https://openai.inference.de-txl.ionos.com/v1/chat/completions")
 CLOUD_API_BASE = "https://api.ionos.com/cloudapi/v6"
+
+S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
+S3_SECRET_KEY = os.getenv("S3_SECRET_KEY")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://s3.eu-central-2.ionoscloud.com")
+S3_BUCKET = os.getenv("S3_BUCKET", "ashley-memory")

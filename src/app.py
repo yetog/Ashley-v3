@@ -1,221 +1,175 @@
 import sys
 import os
-import streamlit as st
+import uuid
 import logging
+import streamlit as st
 
-# Enhanced error handling and logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-# More robust module import with error handling
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, project_root)
+
 try:
-    # Dynamic path resolution
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    sys.path.insert(0, project_root)
-    
-    from src.backend import query_ionos
+    from src.backend import stream_query_ionos
+    from src.storage import ensure_bucket, save_conversation, load_conversation, list_conversations, upload_knowledge_doc
 except ImportError as e:
-    logger.error(f"Module Import Error: {e}")
-    st.error(f"❌ Critical Error: Backend module not found. Please check your project structure.")
-    
-    # Fallback query function if import fails
-    def query_ionos(input_text):
-        return f"Error: Unable to process query - {input_text}"
+    logger.error(f"Import error: {e}")
+    st.error(f"Critical error: {e}")
+    st.stop()
+
 
 class AshleyAIAssistant:
     def __init__(self):
-        """
-        Initialize the Streamlit application with enhanced configuration
-        and session state management.
-        """
-        
         self._setup_page_config()
         self._initialize_session_state()
-        self.quick_start_questions = [
-            "List my datacenters",
-            "Show all my servers",
-            "What cloud services does IONOS offer?",
-        ]
-        
+        ensure_bucket()
+
     def _setup_page_config(self):
-        """Configure Streamlit page settings for better user experience."""
         st.set_page_config(
-            page_title="Ashley - AI Cloud Assistant",
+            page_title="Ashley v5 - AI Cloud Assistant",
             page_icon="🚀",
             layout="wide",
             initial_sidebar_state="expanded"
         )
-        
+
     def _initialize_session_state(self):
-        """Initialize and manage session state variables."""
-        session_defaults = {
+        defaults = {
             "messages": [],
+            "session_id": str(uuid.uuid4()),
             "conversation_tokens": 0,
-            "max_tokens": 4000,
-            "theme": "light",
-            "last_quick_start_question": None
         }
-        
-        for key, default_value in session_defaults.items():
+        for key, val in defaults.items():
             if key not in st.session_state:
-                st.session_state[key] = default_value
-        
+                st.session_state[key] = val
+
     def render_sidebar(self):
-        """Create a comprehensive and interactive sidebar."""
         with st.sidebar:
-            # Enhanced About Section
             with st.expander("👤 Meet Ashley", expanded=False):
                 st.markdown("""
-                **Ashley** is an intelligent AI assistant specialized in:
-                - Cloud Consulting
-                - Technical Problem Solving
-                - AI-Powered Insights
-                 """)
-                st.markdown("""
-                Developed by Isayah Young Burke IONOS US Cloud.
+**Ashley v5** is your IONOS Cloud AI assistant. She can:
+- Answer cloud and infrastructure questions
+- List your datacenters and servers
+- Create new servers on demand
+- Remember your conversations
+- Store and retrieve knowledge documents
 
-                            Ashley AI Chatbot Overview
+Built by **Isayah Young-Burke** for IONOS US Cloud.
+Powered by **Meta-Llama-3.3-70B** via IONOS AI Model Hub.
+                """)
 
-                * **Core Technology:**
-                    * LangChain-based chatbot.
-                    * Utilizes the Meta-Llama-3.1-8B-Instruct model for intelligent responses.
-                * **Frontend:**
-                    * Implemented using Streamlit for a user-friendly interface.
-                * **Backend Integration:**
-                    * Integrates with Python and the IONOS inference API for AI-generated responses.
-                * **Functionality:**
-                    * Provides intelligent responses to user queries.
-                                """)
-            
-            # Quick Start Questions Section in an Expander
-            with st.expander("🚀 Quick Start Questions", expanded=False):
-                st.markdown("Click a question to get started:")
-                for idx, question in enumerate(self.quick_start_questions):
-                    # Create a unique key using index
-                    button_key = f"quick_start_button_{idx}"
-                    
-                    # Check if this button was clicked
-                    if st.button(question, key=button_key):
-                        # Check if this is a new question to prevent duplicate processing
-                        if st.session_state['last_quick_start_question'] != question:
-                            st.session_state['last_quick_start_question'] = question
-                            # Process the question directly
-                            self.process_user_input(question)
-            
-            # Resources Section with Icons in an Expander
-            with st.expander("🌐 Connect & Explore", expanded=False):
-                st.markdown("### Explore More Resources")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("[LinkedIn 🔗](https://www.linkedin.com/in/young-burke/)")
-                with col2:
-                    st.markdown("[IONOS Cloud ☁️](https://cloud.ionos.com/compute/cloud-cubes)")
-                
-                # Additional resources
-                st.markdown("### Additional Links")
-                st.markdown("- [IONOS Documentation](https://docs.ionos.com)")
-                st.markdown("- [API Documentation](http://api.ionos.com/docs/inference-openai/v1)")
+            with st.expander("🚀 Quick Actions", expanded=True):
+                st.markdown("Click to run:")
+                quick_actions = [
+                    "List my datacenters",
+                    "Show all my servers",
+                    "What cloud services does IONOS offer?",
+                    "List my knowledge base documents",
+                ]
+                for idx, question in enumerate(quick_actions):
+                    if st.button(question, key=f"quick_{idx}"):
+                        self.process_user_input(question)
+
+            with st.expander("💾 Conversation History", expanded=False):
+                st.markdown("**Current session:** `" + st.session_state["session_id"][:8] + "...`")
+                if st.button("Save current conversation"):
+                    save_conversation(st.session_state["session_id"], st.session_state["messages"])
+                    st.success("Saved to Object Storage.")
+
+                st.markdown("---")
+                st.markdown("**Past sessions:**")
+                sessions = list_conversations()
+                if not sessions:
+                    st.markdown("_No saved sessions yet._")
+                else:
+                    for s in sessions[:10]:
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.markdown(f"`{s['session_id'][:8]}...` — {s['last_modified'][:10]}")
+                        with col2:
+                            if st.button("Load", key=f"load_{s['session_id']}"):
+                                loaded = load_conversation(s["session_id"])
+                                st.session_state["messages"] = loaded
+                                st.session_state["session_id"] = s["session_id"]
+                                st.rerun()
+
+            with st.expander("📚 Knowledge Base", expanded=False):
+                st.markdown("Upload documents for Ashley to reference:")
+                uploaded = st.file_uploader("Upload a document", type=["txt", "md", "pdf"])
+                if uploaded:
+                    result = upload_knowledge_doc(uploaded.name, uploaded.read(), uploaded.type)
+                    st.success(result)
+
+            with st.expander("🌐 Resources", expanded=False):
+                st.markdown("[LinkedIn](https://www.linkedin.com/in/young-burke/)")
+                st.markdown("[IONOS Cloud](https://cloud.ionos.com)")
+                st.markdown("[IONOS Docs](https://docs.ionos.com)")
+                st.markdown("[API Docs](https://api.ionos.com/docs/inference-openai/v1)")
 
             with st.expander("📌 Patch Notes", expanded=False):
-
-                st.markdown("## 📌 Patch Notes v4 - Ashley AI Cloud Assistant")
-
-                st.markdown("### 🔹 **v4 - IONOS Cloud Integration**")
-                st.markdown("* **Live Cloud API:** Ashley can now list datacenters, list servers, and create servers directly from chat.")
-                st.markdown("* **Intent Detection:** Cloud commands are routed to the IONOS Cloud API without consuming LLM tokens.")
-                st.markdown("* **Secure Credentials:** API secrets moved from hardcoded config to `.env` file — never committed to git.")
-                st.markdown("* **IONOS System Prompt:** LLM is now grounded in IONOS Cloud context for more relevant answers.")
-
-                st.markdown("### 🔹 **v3 - Architecture Refactor**")
-                st.markdown("* **Refactored Architecture:** Introduced `AshleyAIAssistant` class for modularity and scalability.")
-                st.markdown("* **Quick Start Questions:** Preset cloud questions for instant responses.")
-                st.markdown("* **Sidebar Improvements:** Expandable sections for AI overview, resources, and quick start interactions.")
-                st.markdown("* **Enhanced Session Management:** Tracks conversation history and token usage.")
-
-                st.markdown("### 💡 **Coming in v5:**")
-                st.markdown("* **Conversation Memory** — multi-turn context across messages")
-                st.markdown("* **Start / Stop / Delete servers** from chat")
-                st.markdown("* **Server templates** for common workloads")
-                st.markdown("* **Cloud cost estimation** before provisioning")
-
-                st.markdown("🚀 **Ashley v4 — now she doesn't just talk about the cloud, she controls it.**")
-
+                st.markdown("## Ashley v5")
+                st.markdown("### New in v5")
+                st.markdown("* **Llama 3.3 70B** — upgraded from 8B for smarter responses")
+                st.markdown("* **Tool Calling** — LLM decides when to call cloud APIs, no more regex")
+                st.markdown("* **Streaming responses** — Ashley types in real time")
+                st.markdown("* **Object Storage** — conversations saved to IONOS S3")
+                st.markdown("* **Knowledge Base** — upload docs for Ashley to reference")
+                st.markdown("* **Conversation History** — load previous sessions from sidebar")
+                st.markdown("### v4")
+                st.markdown("* IONOS Cloud API integration (list DCs, servers, create server)")
+                st.markdown("* Secure .env credential management")
+                st.markdown("### v3")
+                st.markdown("* AshleyAIAssistant class, quick start questions, sidebar")
 
     def process_user_input(self, user_input):
-        """
-        Process user input (either from chat input or quick start buttons)
-        with enhanced error handling
-        """
-        # Validate input
         if not user_input or not isinstance(user_input, str):
-            st.error("Invalid input. Please provide a valid query.")
             return
-        
-        # Save user input to chat history
+
         st.session_state["messages"].append({"role": "user", "content": user_input})
-        
+
         with st.chat_message("user"):
             st.markdown(user_input)
-        
+
         with st.chat_message("assistant"):
+            history = st.session_state["messages"][:-1]  # exclude current message
+            response_chunks = []
+
             try:
-                # Call backend with enhanced error management
-                with st.spinner("Ashley is thinking..."):
-                    response = query_ionos(user_input)
-                
-                # Additional validation of response
-                if not response:
-                    response = "I couldn't generate a meaningful response. Please try again."
-                
-                st.markdown(response)
-                
-                # Update conversation state
-                st.session_state["messages"].append({
-                    "role": "assistant", 
-                    "content": response
-                })
-                
-                # Token tracking (placeholder - adjust based on actual token counting)
-                st.session_state["conversation_tokens"] += len(response.split())
-            
+                placeholder = st.empty()
+                full_response = ""
+                for chunk in stream_query_ionos(user_input, conversation_history=history):
+                    full_response += chunk
+                    placeholder.markdown(full_response + "▌")
+                placeholder.markdown(full_response)
+                response_chunks = full_response
             except Exception as e:
-                logger.error(f"Query Error: {e}")
-                error_message = f"❌ Error processing your request: {str(e)}"
-                st.error(error_message)
-                st.session_state["messages"].append({
-                    "role": "assistant", 
-                    "content": error_message
-                })
-    
+                full_response = f"Error: {str(e)}"
+                st.error(full_response)
+
+            st.session_state["messages"].append({"role": "assistant", "content": full_response})
+            st.session_state["conversation_tokens"] += len(full_response.split())
+
+            # Auto-save after every exchange
+            save_conversation(st.session_state["session_id"], st.session_state["messages"])
+
     def handle_chat_interaction(self):
-        """
-        Manage chat interactions with enhanced error handling
-        and conversation tracking.
-        """
-        # Display existing chat history
         for message in st.session_state["messages"]:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
-        
-        # Handle new user input
-        if user_input := st.chat_input("Ask Ashsley..."):
+
+        if user_input := st.chat_input("Ask Ashley..."):
             self.process_user_input(user_input)
-    
+
     def run(self):
-        """Main method to run the Streamlit application."""
-        # Render the title
-        st.title("Ashley v4 — Your AI Cloud Assistant")
-        
-        # Render sidebar
+        st.title("Ashley v5 — Your AI Cloud Assistant")
         self.render_sidebar()
-        
-        # Handle chat interaction
         self.handle_chat_interaction()
 
+
 def main():
-    """Entry point for the Streamlit application."""
     assistant = AshleyAIAssistant()
     assistant.run()
+
 
 if __name__ == "__main__":
     main()
